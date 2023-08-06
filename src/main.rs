@@ -1,14 +1,23 @@
-use axum::{routing::get, Router};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use tokio::signal;
 
 use std::net::SocketAddr;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/", get(root));
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "hello_axum=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let app = Router::new().route("/", get(root)).fallback(handler_404);
     let addr = SocketAddr::from(([127, 0, 0, 1], 9900));
 
-    println!("listening on {}", addr);
+    tracing::debug!("listening on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -19,6 +28,10 @@ async fn main() {
 
 async fn root() -> &'static str {
     "Hello Axum!!"
+}
+
+async fn handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "404 Not Found")
 }
 
 async fn shutdown_signal() {
@@ -45,5 +58,5 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 
-    println!("signal received, starting graceful shutdown");
+    tracing::debug!("signal received, starting graceful shutdown");
 }
